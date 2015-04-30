@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/gob"
 	"flag"
@@ -56,10 +57,9 @@ func Serve(port *int) {
 				panic(err)
 			}
 			ServerConn.WriteToUDP(otherBuffer.Bytes(), returnAddr)
-			fmt.Println(otherBuffer.Bytes())
 			ServerConn.WriteToUDP(returnBuffer.Bytes(), otherAddr)
-			fmt.Print(returnBuffer.Bytes())
 			fmt.Printf("Addresses Sent\n")
+			delete(serverInternal.pools, poolString)
 
 		}
 		fmt.Println("Received ", string(buf[0:n]), " from ", returnAddr)
@@ -69,25 +69,62 @@ func Serve(port *int) {
 	}
 }
 
+func clientContiniousRead(conn *net.UDPConn, errorChan chan error) {
+	buf := bytes.NewBuffer(make([]byte, bytes.MinRead))
+	for {
+		n, sender, err := conn.ReadFromUDP(buf.Bytes())
+		if n > 0 && err == nil {
+			fmt.Printf("%v says \"%v\"", sender, buf.String())
+		} else if err != nil {
+			errorChan <- err
+		}
+		buf.Reset()
+	}
+}
+
+func clientContiniousWrite(conn *net.UDPConn, partner *net.UDPAddr, errorChan chan error) {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("Enter text: ")
+		text, _ := reader.ReadString('\n')
+		n, err := conn.WriteToUDP([]byte(text), partner)
+		if n > 0 && err == nil {
+			fmt.Printf("Sent to %v", partner)
+		} else if err != nil {
+			errorChan <- err
+		}
+		reader.Reset(os.Stdin)
+	}
+}
+
 func Client(port *int) {
 	addressString := fmt.Sprintf("%v:%v", "", *port)
 	ServerAddr, err := net.ResolveUDPAddr("udp", addressString)
 	CheckError(err)
 	ClientAddr, err := net.ResolveUDPAddr("udp", ":")
 	CheckError(err)
-	conn, err := net.DialUDP("udp", ClientAddr, ServerAddr)
+	conn, err := net.ListenUDP("udp", ClientAddr)
 	fmt.Println(conn.LocalAddr())
 	if err != nil {
 		panic(err)
 	}
 	// Continous Read & Writes.
-	conn.Write([]byte("Hello"))
+	conn.WriteTo([]byte("Hello"), ServerAddr)
 	fmt.Println("Join room")
 	partnerDecoder := gob.NewDecoder(conn)
 	partner := net.UDPAddr{}
 	fmt.Println("Reading")
 	partnerDecoder.Decode(&partner)
-	fmt.Println(partner)
+	fmt.Printf("Attempting to connect to %v\n", partner)
+	errorChannel := make(chan error)
+	if err != nil {
+		panic(err)
+	}
+	//	conn, err = net.ListenUDP("udp", ClientAddr)
+	fmt.Printf("Listening on...%v\n", conn.LocalAddr())
+	go clientContiniousRead(conn, errorChannel)
+	go clientContiniousWrite(conn, &partner, errorChannel)
+	panic(<-errorChannel)
 }
 
 func main() {
@@ -99,6 +136,7 @@ func main() {
 		return
 	} else if clientConnect != nil && *clientConnect != 0 {
 		Client(clientConnect)
+		return
 	}
 	flag.Usage()
 }
