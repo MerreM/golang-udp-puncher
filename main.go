@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 /* A Simple function to verify error */
@@ -18,6 +19,8 @@ func CheckError(err error) {
 		os.Exit(0)
 	}
 }
+
+const MAX_UDP_DATAGRAM = 65507
 
 type UDPLinker struct {
 	server *net.UDPConn
@@ -69,16 +72,15 @@ func Serve(port *int) {
 	}
 }
 
-func clientContiniousRead(conn *net.UDPConn, errorChan chan error) {
-	buf := bytes.NewBuffer(make([]byte, bytes.MinRead))
+func clientContiniousRead(conn *net.UDPConn, server *net.UDPAddr, errorChan chan error) {
+	buf := make([]byte, MAX_UDP_DATAGRAM)
 	for {
-		n, sender, err := conn.ReadFromUDP(buf.Bytes())
+		n, sender, err := conn.ReadFromUDP(buf)
 		if n > 0 && err == nil {
-			fmt.Printf("%v says \"%v\"", sender, buf.String())
+			fmt.Printf("%v says \"%v\"", sender, string(buf[:n]))
 		} else if err != nil {
 			errorChan <- err
 		}
-		buf.Reset()
 	}
 }
 
@@ -87,9 +89,10 @@ func clientContiniousWrite(conn *net.UDPConn, partner *net.UDPAddr, errorChan ch
 	for {
 		fmt.Print("Enter text: ")
 		text, _ := reader.ReadString('\n')
+		text = strings.Replace(text, "\n", "", -1)
 		n, err := conn.WriteToUDP([]byte(text), partner)
 		if n > 0 && err == nil {
-			fmt.Printf("Sent to %v", partner)
+			fmt.Printf("Sent to %v\n", partner)
 		} else if err != nil {
 			errorChan <- err
 		}
@@ -113,7 +116,7 @@ func Client(port *int) {
 	fmt.Println("Join room")
 	partnerDecoder := gob.NewDecoder(conn)
 	partner := net.UDPAddr{}
-	fmt.Println("Reading")
+	fmt.Println("Waiting for another member")
 	partnerDecoder.Decode(&partner)
 	fmt.Printf("Attempting to connect to %v\n", partner)
 	errorChannel := make(chan error)
@@ -122,7 +125,7 @@ func Client(port *int) {
 	}
 	//	conn, err = net.ListenUDP("udp", ClientAddr)
 	fmt.Printf("Listening on...%v\n", conn.LocalAddr())
-	go clientContiniousRead(conn, errorChannel)
+	go clientContiniousRead(conn, ServerAddr, errorChannel)
 	go clientContiniousWrite(conn, &partner, errorChannel)
 	panic(<-errorChannel)
 }
