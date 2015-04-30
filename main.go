@@ -2,6 +2,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"net"
@@ -16,6 +18,11 @@ func CheckError(err error) {
 	}
 }
 
+type UDPLinker struct {
+	server *net.UDPConn
+	pools  map[string]*net.UDPAddr
+}
+
 func Serve(port *int) {
 	addressString := fmt.Sprintf("%v:%v", "", *port)
 	ServerAddr, err := net.ResolveUDPAddr("udp", addressString)
@@ -24,11 +31,38 @@ func Serve(port *int) {
 	CheckError(err)
 	defer ServerConn.Close()
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, 32)
+	serverInternal := &UDPLinker{ServerConn, make(map[string]*net.UDPAddr)}
 
 	for {
-		n, addr, err := ServerConn.ReadFromUDP(buf)
-		fmt.Println("Received ", string(buf[0:n]), " from ", addr)
+		n, returnAddr, err := ServerConn.ReadFromUDP(buf)
+		poolString := string(buf)
+		fmt.Printf("Request for pool %s\n", poolString)
+		if serverInternal.pools[poolString] == nil {
+			serverInternal.pools[poolString] = returnAddr
+		} else {
+			fmt.Printf("Handshake begins\n")
+			otherAddr := serverInternal.pools[poolString]
+			returnBuffer := bytes.NewBuffer(make([]byte, 0))
+			otherBuffer := bytes.NewBuffer(make([]byte, 0))
+			returnEncoder := gob.NewEncoder(returnBuffer)
+			otherEncoder := gob.NewEncoder(otherBuffer)
+			err = returnEncoder.Encode(&returnAddr)
+			if err != nil {
+				panic(err)
+			}
+			err = otherEncoder.Encode(&otherAddr)
+			if err != nil {
+				panic(err)
+			}
+			ServerConn.WriteToUDP(otherBuffer.Bytes(), returnAddr)
+			fmt.Println(otherBuffer.Bytes())
+			ServerConn.WriteToUDP(returnBuffer.Bytes(), otherAddr)
+			fmt.Print(returnBuffer.Bytes())
+			fmt.Printf("Addresses Sent\n")
+
+		}
+		fmt.Println("Received ", string(buf[0:n]), " from ", returnAddr)
 		if err != nil {
 			fmt.Println("Error: ", err)
 		}
@@ -41,14 +75,19 @@ func Client(port *int) {
 	CheckError(err)
 	ClientAddr, err := net.ResolveUDPAddr("udp", ":")
 	CheckError(err)
-	fmt.Println(ClientAddr)
 	conn, err := net.DialUDP("udp", ClientAddr, ServerAddr)
+	fmt.Println(conn.LocalAddr())
 	if err != nil {
 		panic(err)
 	}
 	// Continous Read & Writes.
 	conn.Write([]byte("Hello"))
-
+	fmt.Println("Join room")
+	partnerDecoder := gob.NewDecoder(conn)
+	partner := net.UDPAddr{}
+	fmt.Println("Reading")
+	partnerDecoder.Decode(&partner)
+	fmt.Println(partner)
 }
 
 func main() {
