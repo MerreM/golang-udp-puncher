@@ -80,7 +80,7 @@ func (c *Client) ClientContiniousRead() {
 	buf := make([]byte, MAX_UDP_DATAGRAM)
 	for {
 		n, sender, err := c.conn.ReadFromUDP(buf)
-		ReadPacket(sender)
+		ReadPacket(sender, buf)
 		if n > 0 && err == nil && sender != c.middleMan {
 			c.outputChannel <- TempMessage{sender, string(buf)}
 		} else if n > 0 && err == nil && sender == c.middleMan {
@@ -98,6 +98,9 @@ func (c *Client) ClientContiniousWrite(roomName string) {
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
 		for _, client := range c.rooms[roomName] {
+			messagData := bytes.NewBuffer(make([]byte, 0))
+			binary.Write(messagData, binary.LittleEndian, &RoomMessage{roomName, text})
+			sendMe := Message{ROOM_MESSAGE, false, uint16(messagData.Len()), messagData.Bytes()}
 			n, err := c.conn.WriteToUDP([]byte(text), client)
 			if n > 0 && err == nil {
 				fmt.Printf("Sent to %v\n", client)

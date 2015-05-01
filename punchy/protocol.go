@@ -96,8 +96,8 @@ func ContiniousRead(conn *net.UDPConn, server *net.UDPAddr, errorChan chan error
 	buf := make([]byte, MAX_UDP_DATAGRAM)
 	for {
 		n, sender, err := conn.ReadFromUDP(buf)
-		if n > 0 && err == nil && sender != server {
-			fmt.Printf("%v says \"%v\"", sender, string(buf[:n]))
+		if n > 0 && err == nil {
+
 		} else if n > 0 && err == nil && sender == server {
 
 		} else if err != nil {
