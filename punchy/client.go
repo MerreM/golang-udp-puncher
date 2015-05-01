@@ -2,6 +2,8 @@ package punchy
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"net"
@@ -78,6 +80,7 @@ func (c *Client) ClientContiniousRead() {
 	buf := make([]byte, MAX_UDP_DATAGRAM)
 	for {
 		n, sender, err := c.conn.ReadFromUDP(buf)
+		ReadPacket(sender)
 		if n > 0 && err == nil && sender != c.middleMan {
 			c.outputChannel <- TempMessage{sender, string(buf)}
 		} else if n > 0 && err == nil && sender == c.middleMan {
@@ -104,4 +107,17 @@ func (c *Client) ClientContiniousWrite(roomName string) {
 		}
 		reader.Reset(os.Stdin)
 	}
+}
+
+func (c *Client) MakeRoomMessage(roomName, message string) Message {
+	var sending Message
+	sending.Encrypted = false
+	sending.Type = ROOM_MESSAGE
+	sendMe := &RoomMessage{roomName, message}
+	writeToMe := bytes.NewBuffer(make([]byte, 0))
+	err := binary.Write(writeToMe, binary.LittleEndian, sendMe)
+	if err != nil {
+		panic(err)
+	}
+	return sending
 }
