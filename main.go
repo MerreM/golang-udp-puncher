@@ -2,8 +2,8 @@
 package main
 
 import (
-	"UDPPuncher/punchy"
 	"flag"
+	"golang-udp-puncher/punchy"
 )
 
 func main() {

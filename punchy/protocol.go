@@ -3,7 +3,7 @@ package punchy
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"net"
@@ -48,48 +48,79 @@ type TempMessage struct {
 var ProtocolReadError = errors.New("Message cannot be read")
 var ProtocolWriteError = errors.New("Message cannot be written")
 
-func ReadPacket(sender *net.UDPAddr, p []byte) (*SenderMessage, error) {
-	buffy := bytes.NewBuffer(p)
-	var newMessage SenderMessage
-	newMessage.Sender = sender
-	err := binary.Read(buffy, binary.LittleEndian, newMessage.Type)
+func (m *RoomMessage) GobEncode() ([]byte, error) {
+	w := new(bytes.Buffer)
+	enc := gob.NewEncoder(w)
+	err := enc.Encode(m.room)
 	if err != nil {
-		return nil, ProtocolReadError
+		panic(err)
 	}
-	err = binary.Read(buffy, binary.LittleEndian, newMessage.Encrypted)
+	err = enc.Encode(m.message)
 	if err != nil {
-		return nil, ProtocolReadError
+		panic(err)
 	}
-	err = binary.Read(buffy, binary.LittleEndian, newMessage.Length)
-	if err != nil {
-		return nil, ProtocolReadError
-	}
-	newMessage.Data = buffy.Bytes()[:newMessage.Length]
-	if err != nil {
-		return nil, ProtocolReadError
-	}
-	return &newMessage, nil
+	return w.Bytes(), nil
 }
 
-func BuildMessage(Sender *net.UDPAddr, newMessage *Message) ([]byte, error) {
-	buffy := bytes.NewBuffer(make([]byte, MAX_UDP_DATAGRAM))
-	err := binary.Write(buffy, binary.LittleEndian, newMessage.Type)
+func (m *RoomMessage) GobDecode(buf []byte) error {
+	r := bytes.NewBuffer(buf)
+	decoder := gob.NewDecoder(r)
+	err := decoder.Decode(&m.room)
+	if err != nil {
+		panic(err)
+	}
+	err = decoder.Decode(&m.message)
+	if err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (m *Message) DecodeMessage(sender *net.UDPAddr, p []byte) error {
+	buffy := bytes.NewBuffer(p)
+	decod := gob.NewDecoder(buffy)
+	err := decod.Decode(&m.Type)
+	if err != nil {
+		return ProtocolReadError
+	}
+	err = decod.Decode(&m.Encrypted)
+	if err != nil {
+		return ProtocolReadError
+	}
+	err = decod.Decode(&m.Length)
+	if err != nil {
+		return ProtocolReadError
+	}
+	err = decod.Decode(&m.Data)
+	if err != nil {
+		return ProtocolReadError
+	}
+	if err != nil {
+		return ProtocolReadError
+	}
+	return nil
+}
+
+func (m *Message) EncodeMessage() ([]byte, error) {
+	buf := bytes.NewBuffer(make([]byte, 0))
+	enc := gob.NewEncoder(buf)
+	err := enc.Encode(m.Type)
 	if err != nil {
 		return nil, ProtocolWriteError
 	}
-	err = binary.Write(buffy, binary.LittleEndian, newMessage.Encrypted)
+	err = enc.Encode(m.Encrypted)
 	if err != nil {
 		return nil, ProtocolWriteError
 	}
-	err = binary.Write(buffy, binary.LittleEndian, newMessage.Length)
+	err = enc.Encode(m.Length)
 	if err != nil {
 		return nil, ProtocolWriteError
 	}
-	err = binary.Write(buffy, binary.LittleEndian, newMessage.Data)
+	err = enc.Encode(m.Data)
 	if err != nil {
 		return nil, ProtocolWriteError
 	}
-	return buffy.Bytes(), nil
+	return buf.Bytes(), nil
 }
 
 func ContiniousRead(conn *net.UDPConn, server *net.UDPAddr, errorChan chan error) {

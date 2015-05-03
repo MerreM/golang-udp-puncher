@@ -80,9 +80,17 @@ func (c *Client) ClientContiniousRead() {
 	buf := make([]byte, MAX_UDP_DATAGRAM)
 	for {
 		n, sender, err := c.conn.ReadFromUDP(buf)
-		ReadPacket(sender, buf)
+		var message Message
+		message.DecodeMessage(sender, buf)
+
 		if n > 0 && err == nil && sender != c.middleMan {
-			c.outputChannel <- TempMessage{sender, string(buf)}
+			if message.Type == ROOM_MESSAGE {
+				var roomMessage RoomMessage
+				roomMessage.GobDecode(message.Data)
+				c.outputChannel <- TempMessage{sender, roomMessage.message}
+			} else {
+				c.outputChannel <- TempMessage{sender, string(message.Data)}
+			}
 		} else if n > 0 && err == nil && sender == c.middleMan {
 
 		} else if err != nil {
@@ -98,10 +106,17 @@ func (c *Client) ClientContiniousWrite(roomName string) {
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
 		for _, client := range c.rooms[roomName] {
-			messagData := bytes.NewBuffer(make([]byte, 0))
-			binary.Write(messagData, binary.LittleEndian, &RoomMessage{roomName, text})
-			sendMe := Message{ROOM_MESSAGE, false, uint16(messagData.Len()), messagData.Bytes()}
-			n, err := c.conn.WriteToUDP([]byte(text), client)
+			roomMes := &RoomMessage{roomName, text}
+			roomData, err := roomMes.GobEncode()
+			if err != nil {
+				panic(err)
+			}
+			sendMe := Message{ROOM_MESSAGE, false, uint16(len(roomData)), roomData}
+			data, err := sendMe.EncodeMessage()
+			if err != nil {
+				panic(err)
+			}
+			n, err := c.conn.WriteToUDP(data, client)
 			if n > 0 && err == nil {
 				fmt.Printf("Sent to %v\n", client)
 			} else if err != nil {
