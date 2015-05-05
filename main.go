@@ -11,10 +11,12 @@ func main() {
 	clientConnect := flag.Int("c", 0, "Send mode. Specify port")
 	flag.Parse()
 	if serverPort != nil && *serverPort != 0 {
-		punchy.Serve(serverPort)
+		server := punchy.NewServer(serverPort)
+		server.Serve()
 		return
 	} else if clientConnect != nil && *clientConnect != 0 {
 		client := punchy.NewClient(clientConnect)
+		client.StartUp()
 		client.ConnectToRoom("Hello")
 		return
 	}
