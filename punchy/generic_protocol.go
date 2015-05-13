@@ -10,12 +10,15 @@ import (
 type MessageType uint8
 
 const (
-	PING                 MessageType = 1
-	PONG                 MessageType = 2
-	CONNECT_TO_ROOM      MessageType = 3
-	DISCONNECT_FROM_ROOM MessageType = 4
-	ROOM_LIST            MessageType = 5
-	ROOM_MESSAGE         MessageType = 6
+	PING                  MessageType = 1
+	PONG                  MessageType = 2
+	CONNECT_TO_MIDDLE_MAN MessageType = 3
+	RESPOND_TO_MIDDLE_MAN MessageType = 4
+	CONNECT_TO_ROOM       MessageType = 5
+	DISCONNECT_FROM_ROOM  MessageType = 6
+	ROOM_LIST             MessageType = 7
+	ROOM_MESSAGE          MessageType = 8
+	ROOM_HISTORY          MessageType = 9
 )
 const MAX_UDP_DATAGRAM = 65507
 
