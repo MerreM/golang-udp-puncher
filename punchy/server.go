@@ -53,15 +53,11 @@ func (s *Server) UpdateRoomList(roomName string, room *ChatRoom, client *net.UDP
 	roomList.Room = roomName
 	roomList.Addresses = make([]net.UDPAddr, roomList.Length)
 	count := 0
-	for addrString, _ := range room.clients {
-		if addrString == client.String() {
+	for _, other := range room.clients {
+		if other.address.String() == client.String() {
 			continue
 		}
-		resolvedAddr, err := net.ResolveUDPAddr("udp", addrString)
-		if err != nil {
-			panic(err)
-		}
-		roomList.Addresses[count] = *resolvedAddr
+		roomList.Addresses[count] = *other.address
 		count++
 	}
 	raw, err := roomList.RawMessage()
