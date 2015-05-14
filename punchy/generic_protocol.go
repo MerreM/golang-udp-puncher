@@ -38,6 +38,11 @@ type RoomMessage struct {
 	Room string
 }
 
+type ConnectRoomMessage struct {
+	RoomMessage
+	sharedKey [32]byte
+}
+
 type ChatMessage struct {
 	RoomMessage
 	Message string
@@ -60,6 +65,34 @@ func (m *RoomMessage) DecodeMessage(buf []byte) error {
 	r := bytes.NewBuffer(buf)
 	decoder := gob.NewDecoder(r)
 	err := decoder.Decode(&m.Room)
+	if err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (m *ConnectRoomMessage) EncodeMessage() ([]byte, error) {
+	w := new(bytes.Buffer)
+	enc := gob.NewEncoder(w)
+	err := enc.Encode(m.Room)
+	if err != nil {
+		panic(err)
+	}
+	err = enc.Encode(m.sharedKey)
+	if err != nil {
+		panic(err)
+	}
+	return w.Bytes(), nil
+}
+
+func (m *ConnectRoomMessage) DecodeMessage(buf []byte) error {
+	r := bytes.NewBuffer(buf)
+	decoder := gob.NewDecoder(r)
+	err := decoder.Decode(&m.Room)
+	if err != nil {
+		panic(err)
+	}
+	err = decoder.Decode(&m.sharedKey)
 	if err != nil {
 		panic(err)
 	}

@@ -21,13 +21,19 @@ type Server struct {
 	//	ActiveClients []ClientConnection
 }
 
+type RemoteClient struct {
+	address   *net.UDPAddr
+	sharedKey [32]byte
+	Uptime
+}
+
 type Uptime struct {
 	lastSeen   time.Time
 	checkCount int
 }
 
 type ChatRoom struct {
-	clients     map[string]*Uptime
+	clients     map[string]*RemoteClient
 	upTimeQueue chan *net.UDPAddr
 	pongQueue   chan *net.UDPAddr
 }
@@ -47,11 +53,11 @@ func (s *Server) UpdateRoomList(roomName string, room *ChatRoom, client *net.UDP
 	roomList.Room = roomName
 	roomList.Addresses = make([]net.UDPAddr, roomList.Length)
 	count := 0
-	for addr, _ := range room.clients {
-		if addr == client.String() {
+	for addrString, _ := range room.clients {
+		if addrString == client.String() {
 			continue
 		}
-		resolvedAddr, err := net.ResolveUDPAddr("udp", addr)
+		resolvedAddr, err := net.ResolveUDPAddr("udp", addrString)
 		if err != nil {
 			panic(err)
 		}
@@ -74,17 +80,13 @@ func (s *Server) UpdateRoomList(roomName string, room *ChatRoom, client *net.UDP
 	}
 }
 
-func (s *Server) AddToRoom(roomName string, room *ChatRoom, client *net.UDPAddr) {
-	serverLogger.Println("Adding client to room", client.String())
-	room.clients[client.String()] = &Uptime{time.Now(), 0}
-	room.upTimeQueue <- client
+func (s *Server) AddToRoom(roomName string, room *ChatRoom, client *RemoteClient) {
+	serverLogger.Println("Adding client to room", client.address.String())
+	room.clients[client.address.String()] = client
+	room.upTimeQueue <- client.address
 	serverLogger.Printf("Handshake begins\n")
-	for addrString, _ := range room.clients {
-		addr, err := net.ResolveUDPAddr("udp", addrString)
-		if err != nil {
-			panic(err)
-		}
-		go s.UpdateRoomList(roomName, room, addr)
+	for _, client := range room.clients {
+		go s.UpdateRoomList(roomName, room, client.address)
 	}
 
 }
@@ -133,10 +135,11 @@ func (s *Server) ClientConnectToRoom(message Message) {
 	}
 	serverLogger.Printf("Request for room %s\n", room.Room)
 	if s.Rooms[room.Room] == nil {
-		s.Rooms[room.Room] = &ChatRoom{make(map[string]*Uptime), make(chan *net.UDPAddr, 10), make(chan *net.UDPAddr, 10)}
+		s.Rooms[room.Room] = &ChatRoom{make(map[string]*RemoteClient), make(chan *net.UDPAddr, 10), make(chan *net.UDPAddr, 10)}
 		go s.RoomWatcher(s.Rooms[room.Room])
 	}
-	s.AddToRoom(room.Room, s.Rooms[room.Room], message.Sender())
+	remoteClient := RemoteClient{message.Sender(), *new([32]byte), Uptime{time.Now(), 0}}
+	s.AddToRoom(room.Room, s.Rooms[room.Room], &remoteClient)
 }
 
 func (s *Server) Serve() {
