@@ -1,9 +1,9 @@
 # golang-udp-puncher
 
-A  hole puncher written in go, and clearly ripping off Koen Bollen's python version.
+Based on a UDP puncher by Koen Bollen in python.
 
+This 'ere is now a multi-user and multi-room udp chat program.
+In a *very* early state. 
 
-Highly tempramental, no tests.
-
-In active development as of 01/05/2015.
+Currently is has server & client(s) not clear interface and a lot of logging.
 
